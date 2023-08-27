@@ -1,0 +1,107 @@
+    Dim fileTargetLocation As String &#039;Zmienna przechowuje ścieżkę do pliku
+    Dim Destinydirectory As String &#039;Zmienna przechowuje folder docelowy kopii
+
+    Private Sub Button1_Click(sender As Object, e As EventArgs) Handles Button1.Click
+           &#039;Wywołanie dialogu wskazującego ścieżkę do pliku
+        OpenFileDialog1.Title = &quot;Select a file to copy&quot;
+        OpenFileDialog1.FileName = &quot;&quot;
+        With OpenFileDialog1
+            If .ShowDialog() = DialogResult.OK Then
+                fileTargetLocation = .FileName &#039;załadowanie ścieżki do zmiennej
+                Label1.Text = fileTargetLocation.ToString
+            End If
+        End With
+
+    End Sub
+
+    Private Sub Button2_Click(sender As Object, e As EventArgs) Handles Button2.Click
+           &#039;Wywołanie dialogu wskazującego folder docelowy
+        FolderBrowserDialog1.Description = &quot;Select destiny directory&quot;
+        With FolderBrowserDialog1
+            If .ShowDialog() = DialogResult.OK Then
+                Destinydirectory = .SelectedPath &#039;załadowanie ścieżki do zmiennej
+                Label2.Text = Destinydirectory.ToString
+            End If
+        End With
+    End Sub
+	
+	Private Sub BackgroundWorker1_DoWork(sender As Object, e As System.ComponentModel.DoWorkEventArgs) _
+                                                                        Handles BackgroundWorker1.DoWork
+
+        Dim parts As String() = fileTargetLocation.Split(New Char() {&quot;\&quot;c}) &#039;Dzieli plik 
+        Dim filename As String = parts(parts.Count - 1) &#039;pobiera z podzielonego pliku tylko nazwę pliku który kopiujemy
+        Dim streamRead As New System.IO.FileStream(fileTargetLocation, System.IO.FileMode.Open) &#039;Otwiera nasz plik
+        Dim streamWrite As New System.IO.FileStream(Destinydirectory + &quot;\&quot; + filename,
+                                                    IO.FileMode.Create,
+                                                    IO.FileAccess.Write,
+                                                    IO.FileShare.None) &#039;określa lokalizację docelową pliku i jego właściwości
+
+        Dim lngLen As Long = streamRead.Length - 1
+        Dim byteBuffer(4096) As Byte &#039;inicjujemy buffer
+        Dim intBytesRead As Integer
+        &#039;If we use Async we need to Invoke
+        setLabelTxt(&quot;Copy bytes : (0/&quot; + (lngLen * 100).ToString + &quot;)&quot;, Label3) &#039;Wyświetla ilość skopiowanych bytów
+        &#039;Pętla kopii
+        While streamRead.Position &lt; lngLen
+            If (BackgroundWorker1.CancellationPending = True) Then &#039;Przerywa wykonywanie BackgroundWorkera
+                e.Cancel = True
+                Exit While
+            End If
+            &#039;ładuje poziom na jakim jest kopiowanie do BackgroundWorker-Progress
+            BackgroundWorker1.ReportProgress(CInt(streamRead.Position / lngLen * 100))
+
+            setLabelTxt(&quot;Copy bytes : (&quot; + CInt(streamRead.Position).ToString + &quot;/&quot; +
+                        (lngLen * 100).ToString + &quot;)&quot;, Label3) &#039;Wyświetla stan kopiowania w bytach
+            intBytesRead = (streamRead.Read(byteBuffer, 0, 4096))
+            streamWrite.Write(byteBuffer, 0, intBytesRead) &#039;Zapisuje na dysku
+        End While
+
+        streamWrite.Flush()
+        streamWrite.Close()
+        streamRead.Close()
+
+    End Sub
+
+    Private Sub Button3_Click(sender As Object, e As EventArgs) Handles Button3.Click
+        Button1.Enabled = False &#039;blokuje przycisk 1
+        Button2.Enabled = False &#039;blokuje przycisk 2
+        BackgroundWorker1.RunWorkerAsync() &#039;wywołuje BackgroundWorkera, startuje go
+    End Sub
+
+    Private Sub BackgroundWorker1_ProgressChanged(sender As Object, e As System.ComponentModel.ProgressChangedEventArgs) _
+                                                                                Handles BackgroundWorker1.ProgressChanged
+
+        ProgressBar1.Value = e.ProgressPercentage &#039;Wyświetla stan kopiowania
+    End Sub
+
+    Private Sub BackgroundWorker1_RunWorkerCompleted(sender As Object, e As System.ComponentModel.RunWorkerCompletedEventArgs) _
+                                                                                     Handles BackgroundWorker1.RunWorkerCompleted
+
+        If e.Cancelled = True Then &#039;komunikaty i elementy wykonywalny po ukończeniu kopii bądź jej przerwaniu
+            MsgBox(&quot;Copy canceled!&quot;)
+        Else
+            MsgBox(&quot;Copy complete!&quot;)
+        End If
+        Button1.Enabled = True
+        Button2.Enabled = True
+    End Sub
+
+    &#039;Wymagany sposób odwolywania się do formy podczas wykonywania działań asynchwonicznych takich jak BackgroundWorker
+    Private Sub setLabelTxt(ByVal text As String, ByVal lbl As Label)
+        If lbl.InvokeRequired Then
+            lbl.Invoke(New setLabelTxtInvoker(AddressOf setLabelTxt), text, lbl)
+        Else
+            lbl.Text = text
+        End If
+    End Sub
+    Private Delegate Sub setLabelTxtInvoker(ByVal text As String, ByVal lbl As Label)
+
+    Private Sub Button4_Click(sender As Object, e As EventArgs) Handles Button4.Click
+        If BackgroundWorker1.IsBusy Then &#039; przerywa wykonywanie BackgroundWorkera
+            BackgroundWorker1.CancelAsync()
+        End If
+    End Sub
+	
+	
+	
+	
