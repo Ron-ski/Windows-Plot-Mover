@@ -46,3 +46,5 @@ All moves are written to logs in the log folder, the last two numbers are the si
 
 Plots are renamed whilst being moved, and then renamed once complete. This is a screenshot from my Linux plotter, the files being moved are name .movXX, where XX is the drive number they are bing moved to.
 
+Note: Application settings are saved in a subfolder in C:\Users\<username>\AppData\Local\Windows_Plot_Mover\ it appears to make a new sub folder per version.
+
