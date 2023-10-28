@@ -797,6 +797,30 @@ Namespace My
                 Me("ReservedSpace10") = value
             End Set
         End Property
+        
+        <Global.System.Configuration.UserScopedSettingAttribute(),  _
+         Global.System.Diagnostics.DebuggerNonUserCodeAttribute(),  _
+         Global.System.Configuration.DefaultSettingValueAttribute("plot")>  _
+        Public Property PlotType() As String
+            Get
+                Return CType(Me("PlotType"),String)
+            End Get
+            Set
+                Me("PlotType") = value
+            End Set
+        End Property
+        
+        <Global.System.Configuration.UserScopedSettingAttribute(),  _
+         Global.System.Diagnostics.DebuggerNonUserCodeAttribute(),  _
+         Global.System.Configuration.DefaultSettingValueAttribute("plot")>  _
+        Public Property PlotDeleteType() As String
+            Get
+                Return CType(Me("PlotDeleteType"),String)
+            End Get
+            Set
+                Me("PlotDeleteType") = value
+            End Set
+        End Property
     End Class
 End Namespace
 

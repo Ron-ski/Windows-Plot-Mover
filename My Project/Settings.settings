@@ -188,5 +188,11 @@
     <Setting Name="ReservedSpace10" Type="System.Decimal" Scope="User">
       <Value Profile="(Default)">0</Value>
     </Setting>
+    <Setting Name="PlotType" Type="System.String" Scope="User">
+      <Value Profile="(Default)">plot</Value>
+    </Setting>
+    <Setting Name="PlotDeleteType" Type="System.String" Scope="User">
+      <Value Profile="(Default)">plot</Value>
+    </Setting>
   </Settings>
 </SettingsFile>

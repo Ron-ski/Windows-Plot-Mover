@@ -9,6 +9,7 @@ Imports System.Runtime.CompilerServices
 Imports System.Text.RegularExpressions
 Imports System.Web
 Imports System.Windows.Forms.VisualStyles
+Imports Windows_Plot_Mover.My
 
 Public Class Form1
 
@@ -30,13 +31,18 @@ Public Class Form1
     Dim PlotterPaused As Boolean = False
     Dim LastDriveMovedTo As Integer = 0
     Dim Startup As Boolean = True           'Used in the form1 load to stop multiple calls to drivelocations routine when check boxes change
+    Dim PlotType As String = "plot"
+    Dim PlotDeleteType As String = "plot"
+    Dim MyAppPath As String
 
 
     Private Sub Form1_Load(sender As Object, e As EventArgs) Handles MyBase.Load
 
         'Check if PlotMove exists
 
-        If Not My.Computer.FileSystem.FileExists(IO.Path.GetFullPath(Application.StartupPath) & "\PloteMove.exe") Then
+        MyAppPath = My.Application.Info.DirectoryPath
+
+        If Not My.Computer.FileSystem.FileExists(MyAppPath & "\PlotMove.exe") Then
             MessageBox.Show("The PlotMove program is missing, it should be in the same folder as this program, please download it from Github. ", "PlotMove program missing", MessageBoxButtons.OK, MessageBoxIcon.Exclamation)
             Me.Close()
         End If
@@ -108,11 +114,14 @@ Public Class Form1
         TxtReserved8.Text = My.Settings.ReservedSpace8.ToString
         TxtReserved9.Text = My.Settings.ReservedSpace9.ToString
         TxtReserved10.Text = My.Settings.ReservedSpace10.ToString
+        ComBoxPLotType.Text = My.Settings.PlotType.ToString
+        ComBoxPlotDeleteType.Text = My.Settings.PlotDeleteType.ToString
+
 
         NumUpDownMaxMove.Value = My.Settings.MaxConsecMoves
 
         txtPlotSourceFolder.Text = My.Settings.PlotSourceFolder
-        Me.Text = Me.Text & " (V " & Me.GetType.Assembly.GetName.Version.ToString() & ")"
+        Me.Text = Me.Text & " (v " & Me.GetType.Assembly.GetName.Version.ToString() & ")"
 
         Startup = False
 
@@ -148,7 +157,13 @@ Public Class Form1
             GetListofPlots()                                                        'build the list of plots
             Timer_CheckandMove.Enabled = True                                       'start checking to see if moves have completed, update the plot list etc.
         Else
-            LblMonitoring.Text = "Not monitoring for plots - " & MyFolder & " does not exist."
+
+            If MyFolder = "" Then
+                LblMonitoring.Text = "Not monitoring for plots - plots folder is not set up."
+            Else
+                LblMonitoring.Text = "Not monitoring for plots - " & MyFolder & " does not exist."
+            End If
+
         End If
 
     End Sub
@@ -1021,17 +1036,25 @@ Public Class Form1
     Private Function DriveFreeSpace(ByVal DrivePath As String) As Decimal
 
         'Returns the freespace on the disk.
+        Try
 
-        If DrivePath = "" Then
+            If DrivePath = "" Then
+                Return 0
+            End If
+
+            If Not System.IO.Directory.Exists(DrivePath) Then
+                Return 0
+            End If
+
+            Return ((New DriveInfo(DrivePath).AvailableFreeSpace))
+
+        Catch ex As Exception
+
+            'MessageBox.Show(String.Format("Error in DriveFreeSpace: {0}", ex.Message))
+            ExceptionThrown("DriveFreeSpace", String.Format("{0}" & ex.Message))
+
             Return 0
-        End If
-
-        If Not System.IO.Directory.Exists(DrivePath) Then
-            Return 0
-        End If
-
-        Return ((New DriveInfo(DrivePath).AvailableFreeSpace))
-
+        End Try
 
     End Function
 
@@ -1066,43 +1089,52 @@ Public Class Form1
 
         StopMoving = False
 
-        lblStatus.Text = "Started - waiting for plots"
         BtnStopMovingPlots.Enabled = True
         BtnStartMovingPlots.Enabled = False
+        Timer_CheckandMove.Interval = 250
 
     End Sub
     Private Sub GetListofPlots()
 
         'This refreshes the list of plots to be moved.
 
-        If txtPlotSourceFolder.Text = "" Then
-            Return
-        ElseIf Not System.IO.Directory.Exists(txtPlotSourceFolder.Text) Then
-            Return
-        End If
+        Try
 
-        Dim strFileSize As String
-        Dim di As New IO.DirectoryInfo(txtPlotSourceFolder.Text)
-        Dim aryFi As IO.FileInfo() = di.GetFiles("*.plot")
-        Dim fi As IO.FileInfo
+            If txtPlotSourceFolder.Text = "" Then
+                Return
+            ElseIf Not System.IO.Directory.Exists(txtPlotSourceFolder.Text) Then
+                Return
+            End If
+
+            Dim strFileSize As String
+            Dim di As New IO.DirectoryInfo(txtPlotSourceFolder.Text)
+            Dim aryFi As IO.FileInfo() = di.GetFiles("*." & PlotType)
+            Dim fi As IO.FileInfo
 
 
-        ListBox_Plots2Move.BeginUpdate()        'Stops the list being redrawn whilst updated
-        ListBox_SizeOfPlots.BeginUpdate()
+            ListBox_Plots2Move.BeginUpdate()        'Stops the list being redrawn whilst updated
+            ListBox_SizeOfPlots.BeginUpdate()
 
-        ListBox_Plots2Move.Items.Clear()
-        ListBox_SizeOfPlots.Items.Clear()
+            ListBox_Plots2Move.Items.Clear()
+            ListBox_SizeOfPlots.Items.Clear()
 
-        For Each fi In aryFi
+            For Each fi In aryFi
 
-            strFileSize = (Math.Round(fi.Length / 1024 / 1024 / 1024, 2)).ToString()
-            ListBox_Plots2Move.Items.Add(fi.FullName)
-            ListBox_SizeOfPlots.Items.Add(strFileSize)
+                strFileSize = (Math.Round(fi.Length / 1024 / 1024 / 1024, 2)).ToString()
+                ListBox_Plots2Move.Items.Add(fi.FullName)
+                ListBox_SizeOfPlots.Items.Add(strFileSize)
 
-        Next
+            Next
 
-        ListBox_Plots2Move.EndUpdate()      'Redraws the list
-        ListBox_SizeOfPlots.EndUpdate()
+            ListBox_Plots2Move.EndUpdate()      'Redraws the list
+            ListBox_SizeOfPlots.EndUpdate()
+
+        Catch ex As Exception
+
+            'MessageBox.Show(String.Format("Error in GetListofPlots: {0}", ex.Message))
+            ExceptionThrown("GetListofPlots", String.Format("{0}" & ex.Message))
+
+        End Try
 
     End Sub
 
@@ -1153,7 +1185,7 @@ Public Class Form1
         End If
 
         Dim di As New IO.DirectoryInfo(DeleteLocation(DriveNumber))
-        Dim aryFi As IO.FileInfo() = di.GetFiles("*.plot")
+        Dim aryFi As IO.FileInfo() = di.GetFiles("*." & PlotDeleteType)
         Dim fi As IO.FileInfo
 
         DriveFull = True 'if we make it all the way through the for next loop the drive is full
@@ -1162,8 +1194,15 @@ Public Class Form1
         For Each fi In aryFi
 
             If System.IO.File.Exists(fi.FullName) = True Then
+                Try
+                    System.IO.File.Delete(fi.FullName)              'we crash here if the plot is locked
+                Catch ex As Exception
 
-                System.IO.File.Delete(fi.FullName)
+                    ExceptionThrown("DeletePlots", ex.Message)
+
+                End Try
+
+
             End If
 
             'Now we need to check if we have enough free space
@@ -1189,6 +1228,58 @@ Public Class Form1
         Return 1 ' We have enough space
 
     End Function
+
+    Private Sub ExceptionThrown(Mysub As String, MyException As String)
+
+        Dim Gridrow As Integer = 0
+        Dim Exists As Boolean = False
+
+        For Each Row As DataGridViewRow In ErrorGridView.Rows
+            Dim cell As DataGridViewCell = (ErrorGridView.Rows(Gridrow).Cells(2))
+            If cell.Value.ToString = MyException Then
+                Exists = True
+                Exit For
+            End If
+            Gridrow += 1
+
+        Next
+
+        If Exists Then
+            Dim count As Int32
+            count = CInt(ErrorGridView.Rows(Gridrow).Cells(0).Value) + 1
+            ErrorGridView.Rows(Gridrow).Cells(0).Value = count
+        Else
+            ErrorGridView.Rows.Add("1", Mysub, MyException)
+        End If
+
+        TabCtrl.TabPages(2).Text = "Error Exceptions (" & ErrorGridView.RowCount.ToString & ")"
+
+
+    End Sub
+
+    Private Sub Btn_ClearErrors_Click(sender As Object, e As EventArgs) Handles Btn_ClearErrors.Click
+
+        ErrorGridView.Rows.Clear()
+        ErrorGridView.Columns.Clear()
+        TabCtrl.TabPages(2).Text = "Error Exceptions (0)"
+
+    End Sub
+
+    Private Sub ListBox_Errors_DoubleClick(sender As Object, e As EventArgs)
+
+        'For x = 0 To ListBox_Errors.Items.Count - 1
+        'If ListBox_Errors.SelectedItem Then
+        ' Next
+
+        ' Dim SelectedError As String = ListBox_Errors.SelectedItems.ToString
+        ' My.Computer.Clipboard.SetText(clip)
+
+        ' MsgBox()
+
+    End Sub
+
+
+
 
     Private Sub UpdateMovesList()
 
@@ -1239,30 +1330,49 @@ Public Class Form1
         GetListofPlots()             'Refresh the list of plots
         SetallDriveSpace()           'Update drive space
 
-        'This section updates the list to show whether a drive is full or not, otherwise its not done until we try and move a plot to that drive
+        'This section updates the list to show whether a drive is setup, available, full or not, otherwise its not done until we try and move a plot to that drive
+
+        Dim MyText As String = ""
 
         For a = 1 To DriveSlots
 
             If ListBox_Plots2Move.Items.Count > 0 Then
+
                 If DriveBusy(a) = False Then   'if the drive is busy we can ignore it
 
-                    Dim PlotFullPathName As String = ListBox_Plots2Move.Items(0).ToString
-                    If My.Computer.FileSystem.FileExists(PlotFullPathName) Then
+                    If Destination(a) = "" Then 'is the drive destination blank
 
-                        Dim SpaceRequired As Long = CLng(FileLen(PlotFullPathName)) 'get the size of the plot
+                        MyText = "Drive " & a.ToString & " (" & Nickname(a) & ")" & " is not setup"
 
-                        If FreeDriveSpace(a) + DeletePlotsSize(a) - ReservedSpace(a) - SpaceRequired < 0 Then  'The drive doesn't have enough space
+                    ElseIf Not System.IO.Directory.Exists(Destination(a)) Then 'is the drive accessible
 
-                            ListBox_PlotsBeingMoved.Items.RemoveAt(a - 1)
-                            ListBox_PlotsBeingMoved.Items.Insert(a - 1, "Drive " & a.ToString & " (" & Nickname(a) & ")" & " is full")
+                        MyText = "Drive " & a.ToString & " (" & Nickname(a) & ")" & " location not valid"
 
-                        Else ' the drive isn't busy and it isn't full
+                    Else
 
-                            ListBox_PlotsBeingMoved.Items.RemoveAt(a - 1)
-                            ListBox_PlotsBeingMoved.Items.Insert(a - 1, "Drive " & a.ToString & " (" & Nickname(a) & ")" & " is not busy")
+                        Dim PlotFullPathName As String = ListBox_Plots2Move.Items(0).ToString
 
+                        If My.Computer.FileSystem.FileExists(PlotFullPathName) Then
+
+                            Dim SpaceRequired As Long = CLng(FileLen(PlotFullPathName)) 'get the size of the plot
+
+                            If FreeDriveSpace(a) + DeletePlotsSize(a) - ReservedSpace(a) - SpaceRequired < 0 Then  'The drive doesn't have enough space
+
+                                MyText = "Drive " & a.ToString & " (" & Nickname(a) & ")" & " is full"
+
+                            Else ' the drive isn't busy, it exists and it isn't full
+
+                                MyText = "Drive " & a.ToString & " (" & Nickname(a) & ")" & " is not busy"
+
+                            End If
                         End If
+
+
                     End If
+
+                    ListBox_PlotsBeingMoved.Items.RemoveAt(a - 1)
+                    ListBox_PlotsBeingMoved.Items.Insert(a - 1, MyText)
+
                 End If
             End If
 
@@ -1342,7 +1452,7 @@ Public Class Form1
         'Check if PlotMove.exe exists - can't move plots without it!
         'This is also checked at startup so unlikely to be missing when we get here!
 
-        If Not My.Computer.FileSystem.FileExists(IO.Path.GetFullPath(Application.StartupPath) & "\PloteMove.exe") Then
+        If Not My.Computer.FileSystem.FileExists(MyAppPath & "\PlotMove.exe") Then
             MessageBox.Show("The PlotMove program is missing, it should be in the same folder as this program, please download it from Github. This program will close.", "PlotMove program missing", MessageBoxButtons.OK, MessageBoxIcon.Exclamation)
             Me.Close()
         End If
@@ -1381,11 +1491,11 @@ Public Class Form1
                 DriveNumberText = DriveNumber.ToString
             End If
 
-            NewPlotName = PlotName.Substring(0, PlotName.Length - 4) & "mov" & DriveNumberText
+            NewPlotName = PlotName & ".mov" & DriveNumberText
 
             My.Computer.FileSystem.RenameFile(PlotFullPathName, NewPlotName)
 
-            NewPlotName = PlotFullPathName.Substring(0, PlotFullPathName.Length - 4) & "mov" & DriveNumberText
+            NewPlotName = PlotFullPathName & ".mov" & DriveNumberText
 
 
             FileMoving(DriveNumber) = NewPlotName 'This will be monitored to know when the move has finished - deleted
@@ -1400,65 +1510,93 @@ Public Class Form1
 
     End Sub
 
+
     Private Sub UpdateStatus()
 
         'Updates the stauts text at the top of the process plots tab.
-
-        Dim PlotSourceFolder As String = txtPlotSourceFolder.Text
-
-        If System.IO.Directory.Exists(PlotSourceFolder) Then
-
-            LblMonitoring.Text = "Monitoring " & PlotSourceFolder & " for plots."
-
-        Else
-
-            LblMonitoring.Text = "Not monitoring for plots - " & PlotSourceFolder & " does not exist."
-            Return
-
-        End If
-
-        Dim di As New IO.DirectoryInfo(PlotSourceFolder)
-        Dim MoveFilesAry As IO.FileInfo() = di.GetFiles("*.mov*")
-        Dim PlotFilesAry As IO.FileInfo() = di.GetFiles("*.plot")
-
-        ActiveMoves = MoveFilesAry.Count
-        Dim PlotsWaitng = PlotFilesAry.Count
-
-        Dim MyStatus As String
-        Dim PlotsWaitingStr As String
+        Try
 
 
-        If StopMoving = True Then
-            If ActiveMoves > 0 Then
-                If ActiveMoves > 1 Then
-                    MyStatus = "Stopping, there are " & ActiveMoves.ToString & " plots still being moved."
+            Dim PlotSourceFolder As String = txtPlotSourceFolder.Text
+
+            If System.IO.Directory.Exists(PlotSourceFolder) Then
+
+                LblMonitoring.Text = "Monitoring " & PlotSourceFolder & " for plots."
+
+            Else
+
+                LblMonitoring.Text = "Not monitoring for plots - " & PlotSourceFolder & " does not exist."
+                ListBox_Plots2Move.Items.Clear()
+                ListBox_SizeOfPlots.Items.Clear()
+                lblStatus.Text = "There are no plots being moved - plot folder does not exist or is not accessible."
+
+                Return
+
+            End If
+
+            Dim di As New IO.DirectoryInfo(PlotSourceFolder)
+            Dim MoveFilesAry As IO.FileInfo() = di.GetFiles("*.mov*")
+            Dim PlotFilesAry As IO.FileInfo() = di.GetFiles("*." & PlotType)
+
+            ActiveMoves = MoveFilesAry.Count
+            Dim PlotsWaitng = PlotFilesAry.Count
+
+            Dim MyStatus As String
+            Dim PlotsWaitingStr As String
+
+
+            If StopMoving = True Then
+                If ActiveMoves > 0 Then
+                    If ActiveMoves > 1 Then
+                        MyStatus = "Stopping, there are " & ActiveMoves.ToString & " plots still being moved."
+                    Else
+                        MyStatus = "Stopping, there is " & ActiveMoves.ToString & " plot still being moved."
+                    End If
+
                 Else
-                    MyStatus = "Stopping, there is " & ActiveMoves.ToString & " plot still being moved."
+                    MyStatus = "Stopped moving plots."
                 End If
-
             Else
-                MyStatus = "Stopped moving plots."
+                If ActiveMoves = 0 Then
+
+                    MyStatus = "Waiting for more plots."
+                    Dim Mytext As String
+                    Dim count As Integer = 0
+
+                    'we check if all drives are full and or not valid, thus no where to move plots to
+
+                    For a = 0 To 9
+
+                        Mytext = ListBox_PlotsBeingMoved.Items(a).ToString
+                        If Mytext.Contains("full") Then count += 1
+                        If Mytext.Contains("location") Then count += 1
+
+                    Next
+
+                    If count = 10 Then MyStatus = "Drives are either full or not setup."
+
+                ElseIf ActiveMoves > 1 Then
+                    MyStatus = "There are " & ActiveMoves.ToString & " plots being moved."
+                Else
+                    MyStatus = "There is " & ActiveMoves.ToString & " plot being moved."
+                End If
             End If
-        Else
-            If ActiveMoves = 0 Then
 
-                MyStatus = "Waiting for more plots."
-
-            ElseIf ActiveMoves > 1 Then
-                MyStatus = "There are " & ActiveMoves.ToString & " plots being moved."
+            If PlotsWaitng = 1 Then
+                PlotsWaitingStr = "There is 1 plot waiting to be moved."
             Else
-                MyStatus = "There is " & ActiveMoves.ToString & " plot being moved."
+                PlotsWaitingStr = "There are " & PlotsWaitng.ToString & " to be moved."
+
             End If
-        End If
 
-        If PlotsWaitng = 1 Then
-            PlotsWaitingStr = "There is 1 plot waiting to be moved."
-        Else
-            PlotsWaitingStr = "There are " & PlotsWaitng.ToString & " to be moved."
+            lblStatus.Text = MyStatus & PlotsWaitingStr
 
-        End If
+        Catch ex As Exception
 
-        lblStatus.Text = MyStatus & PlotsWaitingStr
+            'MessageBox.Show(String.Format("Error in UpdateStatus: {0}", ex.Message))
+            ExceptionThrown("UpdateStatus", String.Format("{0}" & ex.Message))
+
+        End Try
 
     End Sub
 
@@ -1589,22 +1727,24 @@ Public Class Form1
 
     End Sub
 
-    Public Function GetFolderSize(ByVal folderPath As String) As Decimal
+    Public Function GetFolderSize(ByVal folderPath As String, ByVal plotextension As String) As Decimal
 
-        'Gets the size of all the .plot files in the directory
+        'Gets the size of all the plot files in the directory
 
         Dim size As Decimal = 0
 
         If System.IO.Directory.Exists(folderPath) Then
 
             Try
-                Dim files As String() = Directory.GetFiles(folderPath, "*.plot", SearchOption.AllDirectories)
+                Dim files As String() = Directory.GetFiles(folderPath, "*." & plotextension, SearchOption.AllDirectories)
                 For Each file As String In files
                     Dim fileInfo As New FileInfo(file)
                     size += fileInfo.Length
                 Next
             Catch ex As Exception
                 ' Handle any exceptions that may occur, or not as the case may be!
+                'MessageBox.Show(String.Format("Error in GetFolderSize: {0}", ex.Message))
+                ExceptionThrown("GetFolderSize", String.Format("{0}" & ex.Message))
             End Try
 
         End If
@@ -1652,7 +1792,7 @@ Public Class Form1
 
         For a = 1 To DriveSlots
 
-            Size = GetFolderSize(DeleteLocation(a))
+            Size = GetFolderSize(DeleteLocation(a), PlotDeleteType)
             DeletePlotsSize(a) = Size
             ListBox_SizeofDeletePlots.Items.RemoveAt(a - 1)
             ListBox_SizeofDeletePlots.Items.Insert(a - 1, ForHumans(Size))
@@ -1712,7 +1852,7 @@ Public Class Form1
 
         'Opens the logs folder
 
-        Process.Start(IO.Path.GetFullPath(Application.StartupPath) & "\Logs")
+        Process.Start(MyAppPath & "\Logs")
 
     End Sub
 
@@ -1720,6 +1860,7 @@ Public Class Form1
 
         'Starts the event timer when we leave the drive locations tab
 
+        Timer_CheckandMove.Interval = 250 'So changes appear immediate, rather than wait 5 seconds
         Timer_CheckandMove.Enabled = True
 
     End Sub
@@ -1731,6 +1872,42 @@ Public Class Form1
         Timer_CheckandMove.Enabled = False
 
     End Sub
+
+    Private Sub TxtReserved1_Leave(sender As Object, e As EventArgs) Handles TxtReserved1.Leave, TxtReserved2.Leave, TxtReserved3.Leave, TxtReserved4.Leave, TxtReserved5.Leave, TxtReserved6.Leave, TxtReserved7.Leave, TxtReserved8.Leave, TxtReserved9.Leave, TxtReserved10.Leave
+
+        If TxtReserved1.Text = "" Then TxtReserved1.Text = "0"
+        If TxtReserved2.Text = "" Then TxtReserved2.Text = "0"
+        If TxtReserved3.Text = "" Then TxtReserved3.Text = "0"
+        If TxtReserved4.Text = "" Then TxtReserved4.Text = "0"
+        If TxtReserved5.Text = "" Then TxtReserved5.Text = "0"
+        If TxtReserved6.Text = "" Then TxtReserved6.Text = "0"
+        If TxtReserved7.Text = "" Then TxtReserved7.Text = "0"
+        If TxtReserved8.Text = "" Then TxtReserved8.Text = "0"
+        If TxtReserved9.Text = "" Then TxtReserved9.Text = "0"
+        If TxtReserved10.Text = "" Then TxtReserved10.Text = "0"
+
+    End Sub
+
+    Private Sub Button1_Click_2(sender As Object, e As EventArgs) Handles Button1.Click
+
+        Clipboard.SetText(txtXCH_address.Text)
+
+    End Sub
+
+    Private Sub ComBoxPLotType_TextChanged(sender As Object, e As EventArgs) Handles ComBoxPLotType.TextChanged
+
+        PlotType = ComBoxPLotType.Text
+        Timer_CheckandMove.Interval = 250
+
+    End Sub
+
+    Private Sub ComBoxPlotDeleteType_TextChanged(sender As Object, e As EventArgs) Handles ComBoxPlotDeleteType.TextChanged
+
+        PlotDeleteType = ComBoxPlotDeleteType.Text
+        Timer_CheckandMove.Interval = 250
+
+    End Sub
+
 
     Private Sub Form1_Closing(sender As Object, e As CancelEventArgs) Handles Me.Closing
 
@@ -1805,6 +1982,9 @@ Public Class Form1
         My.Settings.ReservedSpace8 = CInt(TxtReserved8.Text)
         My.Settings.ReservedSpace9 = CInt(TxtReserved9.Text)
         My.Settings.ReservedSpace10 = CInt(TxtReserved10.Text)
+        My.Settings.PlotType = ComBoxPLotType.Text
+        My.Settings.PlotDeleteType = ComBoxPlotDeleteType.Text
+
 
         My.Settings.Save()
 
