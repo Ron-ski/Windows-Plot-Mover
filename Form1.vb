@@ -47,6 +47,16 @@ Public Class Form1
             Me.Close()
         End If
 
+        'This checks if its a new version, and moves across the settings
+        'https://stackoverflow.com/questions/534261/how-do-you-keep-user-config-settings-across-different-assembly-versions-in-net
+
+        If My.Settings.UpgradeRequired Then
+            My.Settings.Upgrade()
+            My.Settings.UpgradeRequired = False
+            My.Settings.Save()
+        End If
+
+
         txtDrive1Dest.Text = My.Settings.Drive1Dest
         txtDrive2Dest.Text = My.Settings.Drive2Dest
         txtDrive3Dest.Text = My.Settings.Drive3Dest
@@ -1342,7 +1352,12 @@ Public Class Form1
 
                     If Destination(a) = "" Then 'is the drive destination blank
 
-                        MyText = "Drive " & a.ToString & " (" & Nickname(a) & ")" & " is not setup"
+                        If Nickname(a) = "" Then
+                            MyText = "Drive " & a.ToString & " Location is not setup"
+                        Else
+                            MyText = "Drive " & a.ToString & " (" & Nickname(a) & ")" & " is not setup"
+                        End If
+
 
                     ElseIf Not System.IO.Directory.Exists(Destination(a)) Then 'is the drive accessible
 
@@ -1433,7 +1448,7 @@ Public Class Form1
 
         If Destination(DriveNumber) = "" Then
             ListBox_PlotsBeingMoved.Items.RemoveAt(DriveNumber - 1)
-            ListBox_PlotsBeingMoved.Items.Insert(DriveNumber - 1, "Drive " & DriveNumber.ToString & " location not setup")
+            ListBox_PlotsBeingMoved.Items.Insert(DriveNumber - 1, "Drive " & DriveNumber.ToString & " Location is not setup")
             Return
         End If
 
@@ -1606,7 +1621,7 @@ Public Class Form1
 
         Call UpdateDestinations()
         Call UpdateDriveDisabled()
-        'Call UpdateNicknames() updated when names are changed
+        Call UpdateNicknames()
         Call UpdateDeletePlots()
         Call UpdateReservedSpace()
 

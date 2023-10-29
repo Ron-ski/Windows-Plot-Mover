@@ -194,5 +194,8 @@
     <Setting Name="PlotDeleteType" Type="System.String" Scope="User">
       <Value Profile="(Default)">plot</Value>
     </Setting>
+    <Setting Name="UpgradeRequired" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">True</Value>
+    </Setting>
   </Settings>
 </SettingsFile>
