@@ -1,4 +1,10 @@
-﻿Option Strict On
+﻿'
+' Github - push/pull and Commit (box pops up on the right) prior to releasing
+' If using an old tag on release on Github, it will pull old soucre code
+' Make sure code has updated prior to releasing.
+'
+
+Option Strict On
 Option Explicit On
 
 
@@ -1061,7 +1067,7 @@ Public Class Form1
         Catch ex As Exception
 
             'MessageBox.Show(String.Format("Error in DriveFreeSpace: {0}", ex.Message))
-            ExceptionThrown("DriveFreeSpace", String.Format("{0}" & ex.Message))
+            ExceptionThrown("DriveFreeSpace", String.Format("{0}", ex.Message))
 
             Return 0
         End Try
@@ -1128,11 +1134,19 @@ Public Class Form1
             ListBox_Plots2Move.Items.Clear()
             ListBox_SizeOfPlots.Items.Clear()
 
+            Dim Len = PlotType.Length + 1       'we get the length + 1 to allow for the .
+
+
             For Each fi In aryFi
 
-                strFileSize = (Math.Round(fi.Length / 1024 / 1024 / 1024, 2)).ToString()
-                ListBox_Plots2Move.Items.Add(fi.FullName)
-                ListBox_SizeOfPlots.Items.Add(strFileSize)
+                'had to add validation, as for some reason on some computers it would pick .fpt_part, which is the temp file.
+
+                If Strings.Right(fi.FullName, Len) = "." & PlotType Then
+                    strFileSize = (Math.Round(fi.Length / 1024 / 1024 / 1024, 2)).ToString()
+                    ListBox_Plots2Move.Items.Add(fi.FullName)
+                    ListBox_SizeOfPlots.Items.Add(strFileSize)
+                End If
+
 
             Next
 
@@ -1142,7 +1156,7 @@ Public Class Form1
         Catch ex As Exception
 
             'MessageBox.Show(String.Format("Error in GetListofPlots: {0}", ex.Message))
-            ExceptionThrown("GetListofPlots", String.Format("{0}" & ex.Message))
+            ExceptionThrown("GetListofPlots", String.Format("{0}", ex.Message))
 
         End Try
 
@@ -1270,25 +1284,9 @@ Public Class Form1
     Private Sub Btn_ClearErrors_Click(sender As Object, e As EventArgs) Handles Btn_ClearErrors.Click
 
         ErrorGridView.Rows.Clear()
-        ErrorGridView.Columns.Clear()
         TabCtrl.TabPages(2).Text = "Error Exceptions (0)"
 
     End Sub
-
-    Private Sub ListBox_Errors_DoubleClick(sender As Object, e As EventArgs)
-
-        'For x = 0 To ListBox_Errors.Items.Count - 1
-        'If ListBox_Errors.SelectedItem Then
-        ' Next
-
-        ' Dim SelectedError As String = ListBox_Errors.SelectedItems.ToString
-        ' My.Computer.Clipboard.SetText(clip)
-
-        ' MsgBox()
-
-    End Sub
-
-
 
 
     Private Sub UpdateMovesList()
@@ -1488,10 +1486,6 @@ Public Class Form1
 
             End If
 
-            ListBox_PlotsBeingMoved.Items.RemoveAt(DriveNumber - 1)
-            ListBox_PlotsBeingMoved.Items.Insert(DriveNumber - 1, "Drive " & DriveNumber.ToString & " (" & Nickname(DriveNumber) & ") busy moving " & PlotFullPathName & " to " & Destination(DriveNumber))
-            DriveBusy(DriveNumber) = True
-
             'Now we move the plot
 
             Dim NewPlotName As String
@@ -1508,16 +1502,28 @@ Public Class Form1
 
             NewPlotName = PlotName & ".mov" & DriveNumberText
 
-            My.Computer.FileSystem.RenameFile(PlotFullPathName, NewPlotName)
+            Try
 
-            NewPlotName = PlotFullPathName & ".mov" & DriveNumberText
+                My.Computer.FileSystem.RenameFile(PlotFullPathName, NewPlotName)
+
+                ListBox_PlotsBeingMoved.Items.RemoveAt(DriveNumber - 1)
+                ListBox_PlotsBeingMoved.Items.Insert(DriveNumber - 1, "Drive " & DriveNumber.ToString & " (" & Nickname(DriveNumber) & ") busy moving " & PlotFullPathName & " to " & Destination(DriveNumber))
+                DriveBusy(DriveNumber) = True
+
+                NewPlotName = PlotFullPathName & ".mov" & DriveNumberText
 
 
-            FileMoving(DriveNumber) = NewPlotName 'This will be monitored to know when the move has finished - deleted
+                FileMoving(DriveNumber) = NewPlotName 'This will be monitored to know when the move has finished - deleted
 
-            Process.Start(My.Application.Info.DirectoryPath + "\PlotMove.exe", Destination(DriveNumber) & "/" & Nickname(DriveNumber) & "/" & NewPlotName)
+                Process.Start(My.Application.Info.DirectoryPath + "\PlotMove.exe", Destination(DriveNumber) & "/" & Nickname(DriveNumber) & "/" & NewPlotName)
 
-            LastDriveMovedTo = DriveNumber
+                LastDriveMovedTo = DriveNumber
+
+            Catch ex As Exception
+
+                ExceptionThrown("MoveNextPlot", String.Format("{0}", ex.Message))
+
+            End Try
 
         End If
 
@@ -1551,11 +1557,9 @@ Public Class Form1
 
             Dim di As New IO.DirectoryInfo(PlotSourceFolder)
             Dim MoveFilesAry As IO.FileInfo() = di.GetFiles("*.mov*")
-            Dim PlotFilesAry As IO.FileInfo() = di.GetFiles("*." & PlotType)
-
             ActiveMoves = MoveFilesAry.Count
-            Dim PlotsWaitng = PlotFilesAry.Count
 
+            Dim PlotsWaitng = ListBox_Plots2Move.Items.Count
             Dim MyStatus As String
             Dim PlotsWaitingStr As String
 
@@ -1580,7 +1584,7 @@ Public Class Form1
 
                     'we check if all drives are full and or not valid, thus no where to move plots to
 
-                    For a = 0 To 9
+                    For a = 0 To (DriveSlots - 1)
 
                         Mytext = ListBox_PlotsBeingMoved.Items(a).ToString
                         If Mytext.Contains("full") Then count += 1
@@ -1588,7 +1592,7 @@ Public Class Form1
 
                     Next
 
-                    If count = 10 Then MyStatus = "Drives are either full or not setup."
+                    If count = DriveSlots Then MyStatus = "Drives are either full or not setup."
 
                 ElseIf ActiveMoves > 1 Then
                     MyStatus = "There are " & ActiveMoves.ToString & " plots being moved."
@@ -1609,7 +1613,7 @@ Public Class Form1
         Catch ex As Exception
 
             'MessageBox.Show(String.Format("Error in UpdateStatus: {0}", ex.Message))
-            ExceptionThrown("UpdateStatus", String.Format("{0}" & ex.Message))
+            ExceptionThrown("UpdateStatus", String.Format("{0}", ex.Message))
 
         End Try
 
@@ -1759,7 +1763,7 @@ Public Class Form1
             Catch ex As Exception
                 ' Handle any exceptions that may occur, or not as the case may be!
                 'MessageBox.Show(String.Format("Error in GetFolderSize: {0}", ex.Message))
-                ExceptionThrown("GetFolderSize", String.Format("{0}" & ex.Message))
+                ExceptionThrown("GetFolderSize", String.Format("{0}", ex.Message))
             End Try
 
         End If
